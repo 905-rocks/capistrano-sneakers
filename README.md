@@ -7,18 +7,16 @@
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'capistrano-sneakers'
+gem 'capistrano-sneakers', github: "mootha/capistrano-sneakers"
 ```
 
 And then execute:
 
-    $ bundle
+$ bundle
 
 Or install it yourself as:
 
-    $ gem install capistrano-sneakers
-
-## Usage
+$ gem install capistrano-sneakers
 
 ## Usage
 ```ruby

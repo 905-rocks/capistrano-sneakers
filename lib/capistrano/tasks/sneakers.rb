@@ -15,6 +15,8 @@ namespace :load do
     # Rbenv and RVM integration
     set :rbenv_map_bins, fetch(:rbenv_map_bins).to_a.concat(%w(sneakers))
     set :rvm_map_bins, fetch(:rvm_map_bins).to_a.concat(%w(sneakers))
+    # Bundler integration
+    set :bundle_bins, fetch(:bundle_bins).to_a.concat(%w(sneakers))
   end
 end
 
@@ -92,11 +94,11 @@ namespace :sneakers do
   end
 
   def start_sneakers(pid_file, idx = 0)
+    raise "[ set :workers, ['worker1', 'workerN'] ] not configured properly, please configure the workers you wish to use" if fetch(:sneakers_workers).nil? or fetch(:sneakers_workers) == false or !fetch(:sneakers_workers).kind_of? Array
+    workers = fetch(:sneakers_workers).compact.join(',')
+
     if fetch(:sneakers_run_config) == true
       # Use sneakers configuration prebuilt in
-      raise "[ set :workers, ['worker1', 'workerN'] ] not configured properly, please configure the workers you wish to use" if fetch(:sneakers_workers).nil? or fetch(:sneakers_workers) == false or !fetch(:sneakers_workers).kind_of? Array
-
-      workers = fetch(:sneakers_workers).compact.join(',')
 
       #run "cmd", env: { 'WORKERS' => workers } #export this to environmental variable
       info "Starting the sneakers processes"
@@ -109,31 +111,24 @@ namespace :sneakers do
     else
       args = []
       # Using custom sneakers setup
-      args.push "--index #{idx}"
-      args.push "--pidfile #{pid_file}"
-      args.push "--environment #{fetch(:sneakers_env)}"
-      args.push "--logfile #{fetch(:sneakers_log)}" if fetch(:sneakers_log)
-      args.push "--require #{fetch(:sneakers_require)}" if fetch(:sneakers_require)
-      args.push "--tag #{fetch(:sneakers_tag)}" if fetch(:sneakers_tag)
-      Array(fetch(:sneakers_queue)).each do |queue|
-        args.push "--queue #{queue}"
-      end
-      args.push "--config #{fetch(:sneakers_config)}" if fetch(:sneakers_config)
-      args.push "--concurrency #{fetch(:sneakers_concurrency)}" if fetch(:sneakers_concurrency)
-      # use sneakers_options for special options
-      args.push fetch(:sneakers_options) if fetch(:sneakers_options)
+      args.push "work #{workers}"
+      args.push "--pid_path #{pid_file}"
+      args.push "--log #{fetch(:sneakers_log)}" if fetch(:sneakers_log)
+      args.push "--require #{fetch(:sneakers_boot_file)}" if fetch(:sneakers_boot_file)
 
       if defined?(JRUBY_VERSION)
         args.push '>/dev/null 2>&1 &'
         warn 'Since JRuby doesn\'t support Process.daemon, sneakers will not be running as a daemon.'
       else
-        args.push '--daemon'
+        args.push '--daemonize'
       end
 
-      if fetch(:start_sneakers_in_background, fetch(:sneakers_run_in_background))
-        background :bundle, :exec, :sneakers, args.compact.join(' ')
-      else
-        execute :bundle, :exec, :sneakers, args.compact.join(' ')
+      with rails_env: fetch(:sneakers_env) do
+        if fetch(:start_sneakers_in_background, fetch(:sneakers_run_in_background))
+          background :sneakers, args.compact.join(' ')
+        else
+          execute :sneakers, args.compact.join(' ')
+        end
       end
     end
   end
