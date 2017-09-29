@@ -12,11 +12,15 @@ namespace :load do
     set :sneakers_workers, -> { false } # if this is false it will cause Capistrano to exit
     set :sneakers_run_config, -> { false } # if this is true sneakers will run with preconfigured /config/initializers/sneakers.rb
     set :sneakers_boot_file, -> { false } # Needed for booting daemons dynamically
+    set :sneakers_user, -> { nil }
     # Rbenv and RVM integration
     set :rbenv_map_bins, fetch(:rbenv_map_bins).to_a.concat(%w(sneakers))
     set :rvm_map_bins, fetch(:rvm_map_bins).to_a.concat(%w(sneakers))
+    set :chruby_map_bins, fetch(:chruby_map_bins).to_a.concat(%w{sneakers})
     # Bundler integration
     set :bundle_bins, fetch(:bundle_bins).to_a.concat(%w(sneakers))
+
+    set :sneakers_use_signals, -> { true }
   end
 end
 
@@ -38,7 +42,7 @@ namespace :sneakers do
     pids = processes_sneakers_pids
     pids.reverse! if reverse
     pids.each_with_index do |pid_file, idx|
-      within current_path do
+      within release_path do
         yield(pid_file, idx)
       end
     end
@@ -46,13 +50,17 @@ namespace :sneakers do
 
   def processes_sneakers_pids
     pids = []
-    raise "sneaker_processes is nil class, cannot continue, please [set :sneaker_processes]" if fetch(:sneakers_processes).nil?
-    fetch(:sneakers_processes).times do |idx|
-      pids.push (idx.zero? && fetch(:sneakers_processes) <= 1) ?
-                    fetch(:sneakers_pid) :
-                    fetch(:sneakers_pid).gsub(/\.pid$/, "-#{idx}.pid")
-
+    sneakers_roles = Array(fetch(:sneakers_role))
+    sneakers_roles.each do |role|
+      next unless host.roles.include?(role)
+      processes = fetch(:"sneakers_#{ role }_processes") || fetch(:sneakers_processes)
+      processes.times do |idx|
+        pids.push (idx.zero? && fetch(:sneakers_processes) <= 1) ?
+                      fetch(:sneakers_pid) :
+                      fetch(:sneakers_pid).gsub(/\.pid$/, "-#{idx}.pid")
+      end
     end
+
     pids
   end
 
@@ -66,7 +74,7 @@ namespace :sneakers do
 
   def stop_sneakers(pid_file)
     if fetch(:sneakers_run_config) == true
-      execute :kill, "-SIGTERM `cat #{pid_file}`"
+      execute :kill, "-TERM `cat #{pid_file}`"
     else
       if fetch(:stop_sneakers_in_background, fetch(:sneakers_run_in_background))
         if fetch(:sneakers_use_signals)
@@ -75,7 +83,11 @@ namespace :sneakers do
           background :bundle, :exec, :sneakersctl, 'stop', "#{pid_file}", fetch(:sneakers_timeout)
         end
       else
-        execute :bundle, :exec, :sneakersctl, 'stop', "#{pid_file}", fetch(:sneakers_timeout)
+        if fetch(:sneakers_use_signals)
+          execute :kill, "-TERM `cat #{pid_file}`"
+        else
+          execute :sneakersctl, 'stop', "#{pid_file}", fetch(:sneakers_timeout)
+        end
       end
     end
   end
@@ -85,7 +97,7 @@ namespace :sneakers do
       execute :kill, "-USR1 `cat #{pid_file}`"
     else
       begin
-        execute :bundle, :exec, :sneakersctl, 'quiet', "#{pid_file}"
+        execute :sneakersctl, 'quiet', "#{pid_file}"
       rescue SSHKit::Command::Failed
         # If gems are not installed eq(first deploy) and sneakers_default_hooks as active
         warn 'sneakersctl not found (ignore if this is the first deploy)'
@@ -150,7 +162,7 @@ namespace :sneakers do
   end
 
   task :add_default_hooks do
-    after 'deploy:starting', 'sneakers:quiet'
+    #after 'deploy:starting', 'sneakers:quiet'
     after 'deploy:updated', 'sneakers:stop'
     after 'deploy:reverted', 'sneakers:stop'
     after 'deploy:published', 'sneakers:start'
