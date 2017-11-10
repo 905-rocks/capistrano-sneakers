@@ -10,7 +10,7 @@ namespace :load do
     set :sneakers_role, -> { :app }
     set :sneakers_processes, -> { 1 }
     set :sneakers_workers, -> { false } # if this is false it will cause Capistrano to exit
-    set :sneakers_run_config, -> { false } # if this is true sneakers will run with preconfigured /config/initializers/sneakers.rb
+    set :sneakers_run_config, -> { true } # if this is true sneakers will run with preconfigured /config/initializers/sneakers.rb
     set :sneakers_boot_file, -> { false } # Needed for booting daemons dynamically
     set :sneakers_user, -> { nil }
     # Rbenv and RVM integration
@@ -106,8 +106,8 @@ namespace :sneakers do
   end
 
   def start_sneakers(pid_file, idx = 0)
-    raise "[ set :workers, ['worker1', 'workerN'] ] not configured properly, please configure the workers you wish to use" if fetch(:sneakers_workers).nil? or fetch(:sneakers_workers) == false or !fetch(:sneakers_workers).kind_of? Array
-    workers = fetch(:sneakers_workers).compact.join(',')
+    # raise "[ set :workers, ['worker1', 'workerN'] ] not configured properly, please configure the workers you wish to use" if fetch(:sneakers_workers).nil? or fetch(:sneakers_workers) == false or !fetch(:sneakers_workers).kind_of? Array
+    # workers = fetch(:sneakers_workers).compact.join(',')
 
     if fetch(:sneakers_run_config) == true
       # Use sneakers configuration prebuilt in
@@ -116,7 +116,7 @@ namespace :sneakers do
       info "Starting the sneakers processes"
       #workers.each do |worker|
 
-      with rails_env: fetch(:sneakers_env), workers: workers do
+      with rails_env: fetch(:sneakers_env) do
         rake 'sneakers:run'
       end
       #execute :bundle, :exec, :sneakers, args.compact.join(' ')
